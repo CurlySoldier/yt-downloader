@@ -1,0 +1,14 @@
+services:
+  ytdl-web:
+    build: .
+    container_name: ytdl-web
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Point this to the folder Navidrome scans for music
+      - /home/chad/downloads:/downloads
+    environment:
+      - DOWNLOAD_DIR=/downloads
+      # Optionally override the output filename pattern
+      # - OUTPUT_TEMPLATE=%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s
