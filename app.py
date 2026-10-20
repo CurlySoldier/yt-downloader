@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import uuid
@@ -21,14 +22,9 @@ limiter = Limiter(get_remote_address, app=app, default_limits=[])
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.expanduser("~/downloads"))
 OUTPUT_TEMPLATE = os.environ.get(
     "OUTPUT_TEMPLATE",
-    "%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s",
+    "Singles/%(title)s.%(ext)s",
 )
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-VIDEO_ID_ARCHIVE = os.environ.get(
-    "VIDEO_ID_ARCHIVE",
-    os.path.join(DOWNLOAD_DIR, ".video-id-archive.txt"),
-)
-VIDEO_ID_ARCHIVE_LOCK = threading.Lock()
 
 # In-memory task store
 tasks = {}
@@ -195,36 +191,6 @@ def _error_hint(error_type):
     return "Unexpected downloader error. Check logs for details."
 
 
-def _read_archived_video_ids():
-    if not os.path.exists(VIDEO_ID_ARCHIVE):
-        return set()
-
-    archived = set()
-    with VIDEO_ID_ARCHIVE_LOCK:
-        try:
-            with open(VIDEO_ID_ARCHIVE, "r", encoding="utf-8") as fh:
-                for line in fh:
-                    value = line.strip()
-                    if value:
-                        archived.add(value)
-        except OSError:
-            return set()
-    return archived
-
-
-def _append_archived_video_id(video_id):
-    if not video_id:
-        return
-
-    archive_dir = os.path.dirname(VIDEO_ID_ARCHIVE)
-    if archive_dir:
-        os.makedirs(archive_dir, exist_ok=True)
-
-    with VIDEO_ID_ARCHIVE_LOCK:
-        with open(VIDEO_ID_ARCHIVE, "a", encoding="utf-8") as fh:
-            fh.write(f"{video_id}\n")
-
-
 def _sanitize_rel_path(value):
     text = (value or "").replace("\\", "/").strip()
     text = text.lstrip("/")
@@ -338,6 +304,38 @@ def _entry_video_id(entry):
     return video_id or None
 
 
+def _sanitize_name(value, fallback):
+    text = (value or "").strip()
+    text = text.replace("%", "_")
+    text = re.sub(r"[\x00-\x1f<>:\"/\\|?*]+", "_", text)
+    text = re.sub(r"\s+", " ", text).strip().rstrip(". ")
+    if not text:
+        text = fallback
+    return text[:180]
+
+
+def _build_output_plan(title, playlist_title=None, playlist_index=None, index_width=2):
+    safe_title = _sanitize_name(title, "Untitled")
+    if playlist_title:
+        safe_playlist = _sanitize_name(playlist_title, "Playlist")
+        idx = max(1, int(playlist_index or 1))
+        index_str = str(idx).zfill(max(2, index_width))
+        folder = safe_playlist
+        file_template = f"{index_str} - {safe_title}.%(ext)s"
+    else:
+        folder = "Singles"
+        file_template = f"{safe_title}.%(ext)s"
+
+    rel_template = os.path.join(folder, file_template).replace("\\", "/")
+    rel_mp3 = rel_template.replace("%(ext)s", "mp3")
+    return {
+        "folder": folder,
+        "file_template": file_template,
+        "rel_template": rel_template,
+        "rel_mp3": rel_mp3,
+    }
+
+
 def _build_download_items(urls, task):
     items = []
 
@@ -355,36 +353,72 @@ def _build_download_items(urls, task):
                 info = ydl.extract_info(url, download=False)
             except Exception as e:
                 _push_event(task, f"Metadata lookup failed for {url}: {e}")
-                items.append({"url": url, "title": url, "source": url})
+                output_plan = _build_output_plan(url)
+                items.append(
+                    {
+                        "url": url,
+                        "title": url,
+                        "source": url,
+                        "thumbnail": None,
+                        "output_template": output_plan["rel_template"],
+                        "output_path": output_plan["rel_mp3"],
+                    }
+                )
                 continue
 
             if info and "entries" in info:
                 playlist_title = info.get("title") or "Playlist"
                 entries = [e for e in (info.get("entries") or []) if e]
+                index_width = max(2, len(str(len(entries) or 1)))
                 if not entries:
-                    items.append({"url": url, "title": playlist_title, "source": url})
+                    output_plan = _build_output_plan(playlist_title)
+                    items.append(
+                        {
+                            "url": url,
+                            "title": playlist_title,
+                            "source": url,
+                            "thumbnail": info.get("thumbnail"),
+                            "output_template": output_plan["rel_template"],
+                            "output_path": output_plan["rel_mp3"],
+                        }
+                    )
                     continue
 
                 for idx, entry in enumerate(entries, start=1):
                     if not can_append_more():
                         break
+                    title = entry.get("title") or f"{playlist_title} #{idx}"
+                    output_plan = _build_output_plan(
+                        title,
+                        playlist_title=playlist_title,
+                        playlist_index=idx,
+                        index_width=index_width,
+                    )
                     items.append(
                         {
                             "url": _entry_to_url(entry, url),
-                            "title": entry.get("title") or f"{playlist_title} #{idx}",
+                            "title": title,
                             "source": url,
                             "video_id": _entry_video_id(entry),
+                            "thumbnail": entry.get("thumbnail") or info.get("thumbnail"),
+                            "output_template": output_plan["rel_template"],
+                            "output_path": output_plan["rel_mp3"],
                         }
                     )
             else:
                 if not can_append_more():
                     break
+                title = (info or {}).get("title") or url
+                output_plan = _build_output_plan(title)
                 items.append(
                     {
                         "url": url,
-                        "title": (info or {}).get("title") or url,
+                        "title": title,
                         "source": url,
                         "video_id": _entry_video_id(info or {}),
+                        "thumbnail": (info or {}).get("thumbnail"),
+                        "output_template": output_plan["rel_template"],
+                        "output_path": output_plan["rel_mp3"],
                     }
                 )
     return items
@@ -435,12 +469,12 @@ def _info_opts():
     }
 
 
-def _download_opts(progress_hook, extra_opts=None):
+def _download_opts(progress_hook, extra_opts=None, output_template=None):
     """Full download opts matching the original CLI flags."""
     opts = {
         **_resilience_opts(),
         # Output path
-        "outtmpl": os.path.join(DOWNLOAD_DIR, OUTPUT_TEMPLATE),
+        "outtmpl": os.path.join(DOWNLOAD_DIR, output_template or OUTPUT_TEMPLATE),
 
         # Audio
         "format": "bestaudio/best",
@@ -451,6 +485,7 @@ def _download_opts(progress_hook, extra_opts=None):
                 "preferredquality": "0",   # VBR best quality (matches --audio-quality 0)
             },
             {"key": "FFmpegMetadata",  "add_metadata": True},   # --embed-metadata
+            {"key": "FFmpegThumbnailsConvertor", "format": "jpg"},
             {"key": "EmbedThumbnail"},                           # --embed-thumbnail
         ],
 
@@ -506,29 +541,53 @@ def api_info():
             try:
                 info = ydl.extract_info(url, download=False)
                 if "entries" in info:
+                    playlist_title = info.get("title", "Untitled Playlist")
+                    playlist_thumbnail = info.get("thumbnail")
+                    entries_raw = [e for e in info["entries"] if e]
+                    index_width = max(2, len(str(len(entries_raw) or 1)))
                     entries = [
                         {
-                            "title": e.get("title", "Unknown"),
+                            "title": title,
                             "duration": e.get("duration"),
-                            "thumbnail": e.get("thumbnail"),
+                            "thumbnail": entry_thumbnail,
+                            "output_path": output_plan["rel_mp3"],
+                            "output_folder": output_plan["folder"],
+                            "output_file": output_plan["rel_mp3"].split("/")[-1],
                         }
-                        for e in info["entries"] if e
+                        for i, e in enumerate(entries_raw, start=1)
+                        for title in [e.get("title", "Unknown")]
+                        for output_plan in [
+                            _build_output_plan(
+                                title,
+                                playlist_title=playlist_title,
+                                playlist_index=i,
+                                index_width=index_width,
+                            )
+                        ]
+                        for entry_thumbnail in [e.get("thumbnail") or playlist_thumbnail]
                     ]
                     results.append({
                         "type": "playlist",
                         "url": url,
-                        "playlist_title": info.get("title", "Untitled Playlist"),
+                        "playlist_title": playlist_title,
+                        "thumbnail": playlist_thumbnail,
+                        "output_folder": _sanitize_name(playlist_title, "Playlist"),
                         "count": len(entries),
                         "entries": entries,
                     })
                 else:
+                    title = info.get("title", "Unknown")
+                    output_plan = _build_output_plan(title)
                     results.append({
                         "type": "video",
                         "url": url,
-                        "title": info.get("title", "Unknown"),
+                        "title": title,
                         "thumbnail": info.get("thumbnail"),
                         "duration": info.get("duration"),
                         "uploader": info.get("uploader"),
+                        "output_path": output_plan["rel_mp3"],
+                        "output_folder": output_plan["folder"],
+                        "output_file": output_plan["rel_mp3"].split("/")[-1],
                     })
             except Exception as e:
                 results.append({"type": "error", "url": url, "error": str(e)})
@@ -576,7 +635,8 @@ def _run_download(task_id, urls):
     emit(force=True)
 
     strategies = _download_strategies()
-    archived_video_ids = _read_archived_video_ids()
+    seen_video_ids = set()
+    seen_urls = set()
 
     def progress_hook(d):
         status = d.get("status")
@@ -601,11 +661,26 @@ def _run_download(task_id, urls):
     try:
         for item in items:
             item_video_id = item.get("video_id")
-            if item_video_id and item_video_id in archived_video_ids:
+            item_url = (item.get("url") or "").strip()
+
+            is_duplicate = False
+            if item_video_id:
+                if item_video_id in seen_video_ids:
+                    is_duplicate = True
+                else:
+                    seen_video_ids.add(item_video_id)
+            elif item_url:
+                if item_url in seen_urls:
+                    is_duplicate = True
+                else:
+                    seen_urls.add(item_url)
+
+            if is_duplicate:
                 task["completed"] += 1
                 task["skipped"] += 1
                 task["progress"] = int(task["completed"] / total * 100)
-                _push_event(task, f"Skipped duplicate '{item['title']}' (video id: {item_video_id})")
+                _push_event(task, f"Skipped duplicate in this request: '{item['title']}'")
+                emit(force=True)
                 continue
 
             task["current_item"] = item["title"]
@@ -628,7 +703,13 @@ def _run_download(task_id, urls):
                 emit(force=True)
 
                 try:
-                    with yt_dlp.YoutubeDL(_download_opts(progress_hook, strategy["extra"])) as ydl:
+                    with yt_dlp.YoutubeDL(
+                        _download_opts(
+                            progress_hook,
+                            strategy["extra"],
+                            output_template=item.get("output_template"),
+                        )
+                    ) as ydl:
                         code = ydl.download([item["url"]])
                     if code == 0:
                         succeeded = True
@@ -648,9 +729,6 @@ def _run_download(task_id, urls):
 
             if succeeded:
                 task["succeeded"] += 1
-                if item_video_id and item_video_id not in archived_video_ids:
-                    _append_archived_video_id(item_video_id)
-                    archived_video_ids.add(item_video_id)
             else:
                 task["failed"] += 1
                 hint = _error_hint(last_error_type)

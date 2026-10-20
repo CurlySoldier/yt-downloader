@@ -4,53 +4,135 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="color-scheme" content="light dark"/>
+<script>
+  (function () {
+    var d = document.documentElement, a = {};
+    try { a = JSON.parse(localStorage.getItem("ytrip.appearance") || "{}"); } catch (e) {}
+    var mode = ["auto", "light", "dark"].indexOf(a.mode) > -1 ? a.mode : "auto";
+    var style = ["indigo", "forest", "rose", "paper", "terminal"].indexOf(a.style) > -1 ? a.style : "indigo";
+    var corners = ["sharp", "soft", "round"].indexOf(a.corners) > -1 ? a.corners : null;
+    var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+    d.dataset.scheme = mode === "auto" ? (dark ? "dark" : "light") : mode;
+    d.dataset.style = style;
+    if (corners) d.dataset.corners = corners;
+  })();
+</script>
 <title>YTRip – YouTube to MP3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
+  /* ---------- Design tokens ---------- */
   :root {
+    --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --tracking: -0.03em;
+    --display-weight: 800;
+
+    --radius-lg: 20px;
+    --radius-md: 12px;
+    --radius-sm: 8px;
+    --radius-btn: 999px;
+    --radius-pill: 999px;
+
     --bg: #eef1f6;
     --surface: #ffffff;
     --surface2: #f4f6fa;
     --border: #dde2ec;
+    --text: #141821;
+    --muted: #667085;
     --accent: #3d3df5;
     --accent-hover: #2f2fd6;
     --accent-ink: #ffffff;
     --accent-soft: rgba(61, 61, 245, 0.09);
-    --text: #141821;
-    --muted: #667085;
     --danger: #d92d3a;
     --danger-soft: rgba(217, 45, 58, 0.08);
     --success: #12805c;
     --success-soft: rgba(18, 128, 92, 0.1);
     --shadow: 0 1px 2px rgba(20, 24, 33, 0.04), 0 8px 24px -12px rgba(20, 24, 33, 0.12);
-    --radius-lg: 20px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
-    --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
-    --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0e1118;
-      --surface: #171b25;
-      --surface2: #1e2330;
-      --border: #2a3040;
-      --accent: #7c85ff;
-      --accent-hover: #939bff;
-      --accent-ink: #0e1118;
-      --accent-soft: rgba(124, 133, 255, 0.13);
-      --text: #eceff6;
-      --muted: #8d95a8;
-      --danger: #ff6b76;
-      --danger-soft: rgba(255, 107, 118, 0.1);
-      --success: #4fd1a1;
-      --success-soft: rgba(79, 209, 161, 0.12);
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
-    }
+  html[data-scheme="light"] { color-scheme: light; }
+  html[data-scheme="dark"] { color-scheme: dark; }
+
+  /* ---------- Mode: dark neutrals + Indigo accent ---------- */
+  [data-scheme="dark"] {
+    --bg: #0e1118;
+    --surface: #171b25;
+    --surface2: #1e2330;
+    --border: #2a3040;
+    --text: #eceff6;
+    --muted: #8d95a8;
+    --accent: #7c85ff;
+    --accent-hover: #939bff;
+    --accent-ink: #0e1118;
+    --accent-soft: rgba(124, 133, 255, 0.13);
+    --danger: #ff6b76;
+    --danger-soft: rgba(255, 107, 118, 0.1);
+    --success: #4fd1a1;
+    --success-soft: rgba(79, 209, 161, 0.12);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
   }
+
+  /* ---------- Style: Forest ---------- */
+  [data-style="forest"] {
+    --bg: #ecf3ee; --surface2: #f2f7f3; --border: #d6e3da;
+    --accent: #1b7f4f; --accent-hover: #146640; --accent-ink: #ffffff; --accent-soft: rgba(27, 127, 79, 0.1);
+  }
+  [data-style="forest"][data-scheme="dark"] {
+    --bg: #0c1310; --surface: #131c17; --surface2: #19251f; --border: #25352b;
+    --accent: #5fd39a; --accent-hover: #7fe0b2; --accent-ink: #0b1510; --accent-soft: rgba(95, 211, 154, 0.13);
+  }
+
+  /* ---------- Style: Rose ---------- */
+  [data-style="rose"] {
+    --accent: #d6336c; --accent-hover: #b82458; --accent-ink: #ffffff; --accent-soft: rgba(214, 51, 108, 0.09);
+  }
+  [data-style="rose"][data-scheme="dark"] {
+    --accent: #ff7aa2; --accent-hover: #ff97b8; --accent-ink: #1a0b12; --accent-soft: rgba(255, 122, 162, 0.14);
+  }
+
+  /* ---------- Style: Paper (editorial serif) ---------- */
+  [data-style="paper"] {
+    --font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --tracking: -0.015em;
+    --display-weight: 500;
+    --radius-lg: 8px; --radius-md: 6px; --radius-sm: 4px; --radius-btn: 4px; --radius-pill: 4px;
+    --bg: #f3efe8; --surface: #fffdf9; --surface2: #f6f1e9; --border: #ddd5c8;
+    --text: #221d17; --muted: #7a7165;
+    --accent: #23406e; --accent-hover: #1a3253; --accent-ink: #ffffff; --accent-soft: rgba(35, 64, 110, 0.09);
+    --shadow: 0 1px 0 rgba(34, 29, 23, 0.05);
+  }
+  [data-style="paper"][data-scheme="dark"] {
+    --bg: #16130e; --surface: #1e1a14; --surface2: #26211a; --border: #373026;
+    --text: #f1ebe0; --muted: #a09584;
+    --accent: #8fb0e8; --accent-hover: #a9c3f0; --accent-ink: #14110c; --accent-soft: rgba(143, 176, 232, 0.14);
+    --shadow: none;
+  }
+  [data-style="paper"] .hero h1 { font-size: clamp(2.2rem, 6.5vw, 3.4rem); }
+
+  /* ---------- Style: Terminal (always dark) ---------- */
+  [data-style="terminal"] {
+    --font-display: 'Space Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --font-body: 'Space Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --tracking: -0.02em;
+    --display-weight: 700;
+    --radius-lg: 4px; --radius-md: 4px; --radius-sm: 3px; --radius-btn: 4px; --radius-pill: 4px;
+    --bg: #0d0d0d; --surface: #161616; --surface2: #1e1e1e; --border: #2a2a2a;
+    --text: #f0f0f0; --muted: #7d7d7d;
+    --accent: #e8ff47; --accent-hover: #d4eb30; --accent-ink: #0d0d0d; --accent-soft: rgba(232, 255, 71, 0.1);
+    --danger: #ff4747; --danger-soft: rgba(255, 71, 71, 0.1);
+    --success: #47ffb2; --success-soft: rgba(71, 255, 178, 0.1);
+    --shadow: none;
+  }
+  html[data-style="terminal"] { color-scheme: dark; }
+  [data-style="terminal"] body { font-size: 14px; }
+  [data-style="terminal"] .hero h1 { font-size: clamp(1.7rem, 5vw, 2.5rem); max-width: 18ch; }
+
+  /* ---------- Corners (overrides style default) ---------- */
+  [data-corners="sharp"] { --radius-lg: 4px; --radius-md: 3px; --radius-sm: 2px; --radius-btn: 3px; --radius-pill: 3px; }
+  [data-corners="soft"]  { --radius-lg: 16px; --radius-md: 10px; --radius-sm: 6px; --radius-btn: 10px; --radius-pill: 8px; }
+  [data-corners="round"] { --radius-lg: 26px; --radius-md: 16px; --radius-sm: 10px; --radius-btn: 999px; --radius-pill: 999px; }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -81,9 +163,9 @@
 
   .logo {
     font-family: var(--font-display);
-    font-weight: 800;
+    font-weight: var(--display-weight);
     font-size: 1.35rem;
-    letter-spacing: -0.03em;
+    letter-spacing: var(--tracking);
     display: flex;
     align-items: center;
     gap: 0.55rem;
@@ -91,7 +173,7 @@
 
   .logo-mark {
     width: 28px; height: 28px;
-    border-radius: 9px;
+    border-radius: var(--radius-sm);
     background: var(--accent);
     color: var(--accent-ink);
     display: grid;
@@ -110,10 +192,10 @@
 
   .hero h1 {
     font-family: var(--font-display);
-    font-weight: 800;
+    font-weight: var(--display-weight);
     font-size: clamp(2rem, 6vw, 3.1rem);
     line-height: 1.04;
-    letter-spacing: -0.035em;
+    letter-spacing: var(--tracking);
     margin-bottom: 0.6rem;
     max-width: 14ch;
   }
@@ -172,7 +254,7 @@
     font-size: 0.88rem;
     font-weight: 600;
     border: 1px solid transparent;
-    border-radius: 999px;
+    border-radius: var(--radius-btn);
     padding: 0.6rem 1.15rem;
     transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
     text-decoration: none;
@@ -227,13 +309,13 @@
 
   .progress-label .pct { color: var(--accent); font-variant-numeric: tabular-nums; }
 
-  .progress-track { height: 8px; background: var(--surface2); border-radius: 999px; overflow: hidden; }
+  .progress-track { height: 8px; background: var(--surface2); border-radius: var(--radius-pill); overflow: hidden; }
 
   .progress-fill {
     height: 100%;
     background: var(--accent);
     width: 0%;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     transition: width 0.4s ease, background 0.3s;
   }
 
@@ -303,7 +385,7 @@
   .badge {
     font-size: 0.78rem;
     background: var(--accent-soft);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 0.25rem 0.7rem;
     color: var(--accent);
     font-weight: 600;
@@ -343,6 +425,9 @@
     border-color: color-mix(in srgb, #f59e0b 34%, transparent);
   }
 
+  [data-scheme="dark"] .badge.status.warn,
+  [data-style="terminal"] .badge.status.warn { color: #fbbf24; }
+
   .badge.status.danger {
     background: var(--danger-soft);
     color: var(--danger);
@@ -374,7 +459,7 @@
 
   .icon-tile {
     width: 34px; height: 34px;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     background: var(--accent-soft);
     color: var(--accent);
     display: grid;
@@ -407,6 +492,17 @@
   .track-item:last-child { border-bottom: none; }
   .track-num { color: var(--muted); font-size: 0.78rem; min-width: 1.5rem; text-align: right; font-variant-numeric: tabular-nums; }
   .track-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-name .path { display: block; font-size: 0.75rem; color: var(--muted); }
+
+  .thumb-img {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+  }
 
   .video-card {
     background: var(--surface);
@@ -445,7 +541,7 @@
     color: var(--muted);
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     padding: 0.25rem 0.75rem;
     margin-bottom: 0.8rem;
     display: inline-block;
@@ -560,6 +656,55 @@
 
   .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--success); margin-right: 0.45rem; }
 
+  /* Appearance panel */
+  .appearance { position: relative; }
+  .appearance-panel[hidden] { display: none; }
+  .appearance-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.6rem);
+    width: 320px;
+    max-width: calc(100vw - 2rem);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow), 0 16px 40px -16px rgba(0, 0, 0, 0.35);
+    padding: 1rem;
+    z-index: 20;
+  }
+  .ap-group { margin-bottom: 1rem; }
+  .ap-label { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.45rem; }
+  .ap-hint { font-size: 0.75rem; color: var(--muted); margin-top: 0.4rem; }
+
+  .seg { display: flex; gap: 2px; background: var(--surface2); padding: 3px; border-radius: var(--radius-btn); }
+  .seg button {
+    flex: 1;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.78rem;
+    padding: 0.4rem 0.4rem;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  .swatches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
+  .swatch {
+    justify-content: flex-start;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    padding: 0.5rem 0.65rem;
+  }
+  .swatch i { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .swatch:hover { background: var(--surface2); }
+  .swatch[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
   @media (max-width: 560px) {
     header { margin-bottom: 2rem; }
     .tagline { display: none; }
@@ -582,7 +727,43 @@
       </span>
       YTRip
     </div>
-    <div class="tagline">Powered by yt-dlp</div>
+    <div class="appearance">
+      <button class="btn-secondary btn-small" id="btn-appearance" aria-expanded="false" aria-controls="appearance-panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18" /><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/></svg>
+        Appearance
+      </button>
+      <div class="appearance-panel" id="appearance-panel" role="dialog" aria-label="Appearance settings" hidden>
+        <div class="ap-group">
+          <div class="ap-label" id="ap-mode-label">Mode</div>
+          <div class="seg" data-setting="mode" role="group" aria-labelledby="ap-mode-label">
+            <button data-value="auto">Auto</button>
+            <button data-value="light">Light</button>
+            <button data-value="dark">Dark</button>
+          </div>
+          <div class="ap-hint" id="mode-hint" hidden>Terminal is always dark.</div>
+        </div>
+        <div class="ap-group">
+          <div class="ap-label" id="ap-style-label">Style</div>
+          <div class="swatches" data-setting="style" role="group" aria-labelledby="ap-style-label">
+            <button class="swatch" data-value="indigo"><i style="background:#3d3df5"></i>Indigo</button>
+            <button class="swatch" data-value="forest"><i style="background:#1b7f4f"></i>Forest</button>
+            <button class="swatch" data-value="rose"><i style="background:#d6336c"></i>Rose</button>
+            <button class="swatch" data-value="paper"><i style="background:#23406e"></i>Paper</button>
+            <button class="swatch" data-value="terminal"><i style="background:#e8ff47;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)"></i>Terminal</button>
+          </div>
+        </div>
+        <div class="ap-group">
+          <div class="ap-label" id="ap-corners-label">Corners</div>
+          <div class="seg" data-setting="corners" role="group" aria-labelledby="ap-corners-label">
+            <button data-value="auto">Default</button>
+            <button data-value="sharp">Sharp</button>
+            <button data-value="soft">Soft</button>
+            <button data-value="round">Round</button>
+          </div>
+        </div>
+        <button class="btn-secondary btn-small" id="btn-appearance-reset">Reset to defaults</button>
+      </div>
+    </div>
   </header>
 
   <section class="hero">
@@ -797,19 +978,18 @@
     stopPolling();
     document.getElementById("urls").value = "";
     document.getElementById("preview-section").style.display = "none";
-    document.getElementById("downloads-section").style.display = "none";
     closeMetadataEditor();
     document.getElementById("issues-section").style.display = "none";
     document.getElementById("issues-list").innerHTML = "";
     document.getElementById("copy-msg").textContent = "";
     hideLibraryMsg();
     currentTaskId = null;
-    currentLibraryPath = "";
     try { localStorage.removeItem("activeTaskId"); } catch (e) { /* ignore */ }
     latestTaskStatus = null;
     updateStatusBadges(null);
     setTransportMode("idle");
     clearError();
+    loadLibrary(currentLibraryPath);
   }
 
   function setTaskId(taskId) {
@@ -917,6 +1097,11 @@
     return `${m}:${String(s).padStart(2,"0")}`;
   }
 
+  function thumbHtml(src, alt) {
+    if (!src) return "";
+    return `<img class="thumb-img" src="${esc(src)}" alt="${esc(alt || "")}" loading="lazy" referrerpolicy="no-referrer">`;
+  }
+
   async function fetchInfo() {
     const urlsText = document.getElementById("urls").value.trim();
     clearError();
@@ -953,10 +1138,11 @@
     results.forEach(r => {
       if (r.type === "playlist") {
         total += r.count;
+        const folderName = r.output_folder || r.playlist_title || "Playlist";
         const entries = r.entries.map((e, i) =>
           `<div class="track-item">
             <span class="track-num">${String(i+1).padStart(2,"0")}</span>
-            <span class="track-name">${esc(e.title)}</span>
+            <span class="track-name">${esc(e.output_file || e.title)}${e.output_path ? `<span class="path">${esc(e.output_path)}</span>` : ""}</span>
           </div>`
         ).join("");
         const pid = "pl_" + Math.random().toString(36).slice(2);
@@ -964,8 +1150,8 @@
           <div class="playlist-block">
             <div class="playlist-header" onclick="toggleTracks('${pid}', this)">
               <div class="playlist-title-row">
-                ${ICON_FOLDER}
-                <span>${esc(r.playlist_title)}</span>
+                ${thumbHtml(r.thumbnail, folderName) || ICON_FOLDER}
+                <span>${esc(folderName)}</span>
                 <span class="track-count">${r.count} tracks</span>
               </div>
               <span class="chevron" id="chev_${pid}">▶</span>
@@ -976,10 +1162,10 @@
         total += 1;
         html += `
           <div class="video-card">
-            ${ICON_NOTE}
+            ${thumbHtml(r.thumbnail, r.title) || ICON_NOTE}
             <div class="info">
-              <div class="title">${esc(r.title)}</div>
-              <div class="meta">${r.uploader ? esc(r.uploader) + " – " : ""}${formatDuration(r.duration)}</div>
+              <div class="title">${esc(r.output_file || r.title)}</div>
+              <div class="meta">${esc(r.output_path || "Singles")}</div>
             </div>
           </div>`;
       } else {
@@ -1467,6 +1653,87 @@
       .replace(/>/g,"&gt;")
       .replace(/"/g,"&quot;");
   }
+
+  // ---------- Appearance ----------
+  const APPEARANCE_KEY = "ytrip.appearance";
+  const APPEARANCE_OPTIONS = {
+    mode: ["auto", "light", "dark"],
+    style: ["indigo", "forest", "rose", "paper", "terminal"],
+    corners: ["auto", "sharp", "soft", "round"],
+  };
+  const APPEARANCE_DEFAULTS = { mode: "auto", style: "indigo", corners: "auto" };
+  let appearance = { ...APPEARANCE_DEFAULTS };
+  const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function loadAppearance() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "{}");
+      for (const key of Object.keys(APPEARANCE_DEFAULTS)) {
+        if (APPEARANCE_OPTIONS[key].includes(saved[key])) appearance[key] = saved[key];
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function saveAppearance() {
+    try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(appearance)); } catch (e) { /* ignore */ }
+  }
+
+  function applyAppearance() {
+    const root = document.documentElement;
+    root.dataset.scheme = appearance.mode === "auto" ? (darkQuery.matches ? "dark" : "light") : appearance.mode;
+    root.dataset.style = appearance.style;
+    if (appearance.corners === "auto") delete root.dataset.corners;
+    else root.dataset.corners = appearance.corners;
+
+    document.querySelectorAll("#appearance-panel [data-setting]").forEach(group => {
+      const key = group.dataset.setting;
+      group.querySelectorAll("button").forEach(b => {
+        b.setAttribute("aria-pressed", String(b.dataset.value === appearance[key]));
+      });
+    });
+    document.getElementById("mode-hint").hidden = appearance.style !== "terminal";
+  }
+
+  function setupAppearance() {
+    loadAppearance();
+    applyAppearance();
+
+    const toggle = document.getElementById("btn-appearance");
+    const panel = document.getElementById("appearance-panel");
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+    }
+
+    toggle.addEventListener("click", () => setOpen(panel.hidden));
+    document.addEventListener("click", (e) => {
+      if (!panel.hidden && !e.target.closest(".appearance")) setOpen(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !panel.hidden) { setOpen(false); toggle.focus(); }
+    });
+
+    panel.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-setting] button");
+      if (!btn) return;
+      appearance[btn.parentElement.dataset.setting] = btn.dataset.value;
+      saveAppearance();
+      applyAppearance();
+    });
+
+    document.getElementById("btn-appearance-reset").addEventListener("click", () => {
+      appearance = { ...APPEARANCE_DEFAULTS };
+      saveAppearance();
+      applyAppearance();
+    });
+
+    const onSystemChange = () => { if (appearance.mode === "auto") applyAppearance(); };
+    if (darkQuery.addEventListener) darkQuery.addEventListener("change", onSystemChange);
+    else if (darkQuery.addListener) darkQuery.addListener(onSystemChange);
+  }
+
+  setupAppearance();
 
   // Load any existing files on page load
   updateStatusBadges(null);
