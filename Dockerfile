@@ -1,15 +1,14 @@
-# Stage 1: fetch ffmpeg once — this layer is cached indefinitely
-FROM python:3.11-slim AS ffmpeg-fetch
-RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
-       | tar -xJ --strip-components=1 -C /usr/local/bin --wildcards '*/ffmpeg' '*/ffprobe' \
-    && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
+# Node.js runtime for yt-dlp's YouTube JavaScript challenges
+FROM node:22-bookworm-slim AS node-runtime
 
-# Stage 2: app — copies binary from cache, never hits apt again
+# App
 FROM python:3.11-slim
-COPY --from=ffmpeg-fetch /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
-COPY --from=ffmpeg-fetch /usr/local/bin/ffprobe /usr/local/bin/ffprobe
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /app
 COPY requirements.txt .

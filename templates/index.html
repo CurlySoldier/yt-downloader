@@ -215,6 +215,56 @@
     text-overflow: ellipsis;
   }
 
+  .issues-section {
+    background: rgba(255, 71, 71, 0.08);
+    border: 1px solid rgba(255, 71, 71, 0.35);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: none;
+  }
+
+  .issues-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .issues-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent2);
+  }
+
+  .issue-row {
+    border: 1px solid rgba(255, 71, 71, 0.22);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius);
+    padding: 0.55rem 0.7rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.72rem;
+    color: #ffd9d9;
+  }
+
+  .issue-row:last-child { margin-bottom: 0; }
+
+  .issue-meta {
+    color: #ff9f9f;
+    font-size: 0.66rem;
+    margin-top: 0.18rem;
+  }
+
+  .copy-msg {
+    margin-top: 0.55rem;
+    font-size: 0.65rem;
+    color: var(--muted);
+    min-height: 1em;
+  }
+
   /* Preview */
   .preview-section {
     display: none;
@@ -344,9 +394,43 @@
     margin-bottom: 0.5rem;
   }
 
-  /* Downloads list */
+  /* Library manager */
   .downloads-section {
     display: none;
+  }
+
+  .library-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.6rem;
+  }
+
+  .path-chip {
+    font-size: 0.65rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.25rem 0.6rem;
+    margin-bottom: 0.75rem;
+    display: inline-block;
+  }
+
+  .library-msg {
+    display: none;
+    font-size: 0.68rem;
+    margin-bottom: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: rgba(71, 255, 178, 0.07);
+    color: var(--success);
+  }
+
+  .library-msg.error {
+    background: rgba(255, 71, 71, 0.09);
+    color: var(--accent2);
+    border-color: rgba(255, 71, 71, 0.4);
   }
 
   .file-row {
@@ -370,6 +454,13 @@
     color: var(--text);
   }
 
+  .file-actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .file-dl-btn {
     background: transparent;
     border: 1px solid var(--border);
@@ -380,6 +471,46 @@
   }
 
   .file-dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .meta-editor {
+    display: none;
+    margin-top: 0.8rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 0.9rem;
+  }
+
+  .meta-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+  }
+
+  .meta-grid {
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    margin-bottom: 0.6rem;
+  }
+
+  .meta-grid input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.5rem 0.6rem;
+    outline: none;
+  }
+
+  .meta-grid input:focus {
+    border-color: var(--accent);
+  }
 
   /* Spinner */
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -440,6 +571,15 @@
     <div class="status-line" id="status-line">Starting…</div>
   </div>
 
+  <div id="issues-section" class="issues-section">
+    <div class="issues-head">
+      <div class="issues-title" id="issues-title">Issues</div>
+      <button class="btn-secondary" id="btn-copy-report" onclick="copyErrorReport()" style="font-size:0.64rem;padding:0.28rem 0.62rem;">Copy Error Report</button>
+    </div>
+    <div id="issues-list"></div>
+    <div id="copy-msg" class="copy-msg"></div>
+  </div>
+
   <div id="preview-section" class="preview-section">
     <div class="section-header">
       <div class="section-title">Preview</div>
@@ -453,10 +593,32 @@
 
   <div id="downloads-section" class="downloads-section">
     <div class="section-header" style="margin-top:1.5rem;">
-      <div class="section-title">Downloaded Files</div>
-      <button class="btn-secondary" onclick="refreshFiles()" style="font-size:0.65rem;padding:0.3rem 0.7rem;">Refresh</button>
+      <div class="section-title">Library</div>
+      <button class="btn-secondary" onclick="loadLibrary(currentLibraryPath)" style="font-size:0.65rem;padding:0.3rem 0.7rem;">Refresh</button>
     </div>
+    <div class="library-toolbar">
+      <button class="btn-secondary" onclick="goLibraryUp()" style="font-size:0.65rem;padding:0.3rem 0.7rem;">Up</button>
+      <button class="btn-secondary" onclick="createFolder()" style="font-size:0.65rem;padding:0.3rem 0.7rem;">New Folder</button>
+    </div>
+    <div id="library-path" class="path-chip">/</div>
+    <div id="library-msg" class="library-msg"></div>
     <div id="files-list"></div>
+    <div id="meta-editor" class="meta-editor">
+      <div class="meta-title">Edit Metadata</div>
+      <div id="meta-file" class="path-chip" style="margin-bottom:0.7rem;"></div>
+      <div class="meta-grid">
+        <input id="meta-title" placeholder="Title"/>
+        <input id="meta-artist" placeholder="Artist"/>
+        <input id="meta-album" placeholder="Album"/>
+        <input id="meta-track" placeholder="Track"/>
+        <input id="meta-year" placeholder="Year"/>
+        <input id="meta-genre" placeholder="Genre"/>
+      </div>
+      <div class="btn-row" style="margin-top:0.2rem;">
+        <button class="btn-primary" onclick="saveMetadata()">Save Metadata</button>
+        <button class="btn-secondary" onclick="closeMetadataEditor()">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <footer>
@@ -467,6 +629,14 @@
 
 <script>
   let currentTaskId = null;
+  let latestTaskStatus = null;
+  let currentLibraryPath = "";
+  let editingSongPath = null;
+  const ACTIVE_STATES = new Set(["queued", "preparing", "downloading", "retrying", "pending"]);
+
+  function isActiveStatus(status) {
+    return ACTIVE_STATES.has(status);
+  }
 
   function showError(msg) {
     const el = document.getElementById("error-banner");
@@ -480,11 +650,149 @@
     el.textContent = "";
   }
 
+  function showLibraryMsg(msg, isError=false) {
+    const el = document.getElementById("library-msg");
+    el.textContent = msg;
+    el.style.display = "block";
+    el.classList.toggle("error", !!isError);
+  }
+
+  function hideLibraryMsg() {
+    const el = document.getElementById("library-msg");
+    el.style.display = "none";
+    el.textContent = "";
+    el.classList.remove("error");
+  }
+
+  function parentPath(path) {
+    if (!path) return "";
+    const parts = path.split("/").filter(Boolean);
+    parts.pop();
+    return parts.join("/");
+  }
+
+  async function fetchJson(url, options={}) {
+    const resp = await fetch(url, options);
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || "Request failed");
+    }
+    return data;
+  }
+
   function clearAll() {
     document.getElementById("urls").value = "";
     document.getElementById("preview-section").style.display = "none";
     document.getElementById("downloads-section").style.display = "none";
+    closeMetadataEditor();
+    document.getElementById("issues-section").style.display = "none";
+    document.getElementById("issues-list").innerHTML = "";
+    document.getElementById("copy-msg").textContent = "";
+    hideLibraryMsg();
+    currentTaskId = null;
+    currentLibraryPath = "";
+    try { localStorage.removeItem("activeTaskId"); } catch (e) { /* ignore */ }
+    latestTaskStatus = null;
     clearError();
+  }
+
+  function setTaskId(taskId) {
+    currentTaskId = taskId || null;
+    try {
+      if (currentTaskId) {
+        localStorage.setItem("activeTaskId", currentTaskId);
+      } else {
+        localStorage.removeItem("activeTaskId");
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function formatSpeed(bytesPerSec) {
+    if (!bytesPerSec || bytesPerSec <= 0) return "";
+    const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+    let n = bytesPerSec;
+    let idx = 0;
+    while (n >= 1024 && idx < units.length - 1) {
+      n /= 1024;
+      idx += 1;
+    }
+    return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[idx]}`;
+  }
+
+  function formatEta(seconds) {
+    if (seconds == null || seconds < 0) return "";
+    const s = Math.floor(seconds % 60);
+    const m = Math.floor((seconds / 60) % 60);
+    const h = Math.floor(seconds / 3600);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }
+
+  function renderIssues(task) {
+    const section = document.getElementById("issues-section");
+    const list = document.getElementById("issues-list");
+    const title = document.getElementById("issues-title");
+    const errors = (task && task.errors) || [];
+
+    if (!errors.length) {
+      section.style.display = "none";
+      list.innerHTML = "";
+      return;
+    }
+
+    title.textContent = `Issues (${errors.length})`;
+    list.innerHTML = errors.map(e => {
+      const name = e.title || e.url || "Unknown item";
+      const type = e.error_type || "unknown";
+      return `<div class="issue-row"><div>${esc(name)}</div><div class="issue-meta">[${esc(type)}] ${esc(e.message || "Download failed")}</div></div>`;
+    }).join("");
+    section.style.display = "block";
+  }
+
+  function buildErrorReport(task) {
+    const errors = (task && task.errors) || [];
+    const lines = [];
+    lines.push(`Task: ${currentTaskId || "unknown"}`);
+    lines.push(`Phase: ${task.phase || task.status || "unknown"}`);
+    lines.push(`Result: ${task.summary || "n/a"}`);
+    lines.push(`Totals: total=${task.total || 0} completed=${task.completed || 0} ok=${task.succeeded || 0} skipped=${task.skipped || 0} failed=${task.failed || 0}`);
+    lines.push(`LastError: ${task.last_error || "none"}`);
+    lines.push("Failures:");
+    if (!errors.length) {
+      lines.push("- none");
+    } else {
+      errors.forEach(e => {
+        lines.push(`- [${e.error_type || "unknown"}] ${e.url || "unknown"}: ${e.message || "Download failed"}`);
+      });
+    }
+    lines.push(`Generated: ${new Date().toISOString()}`);
+    return lines.join("\n");
+  }
+
+  async function copyErrorReport() {
+    const msg = document.getElementById("copy-msg");
+    if (!latestTaskStatus) {
+      msg.textContent = "No task data available yet.";
+      return;
+    }
+    const report = buildErrorReport(latestTaskStatus);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(report);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = report;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      msg.textContent = "Error report copied to clipboard.";
+    } catch (err) {
+      msg.textContent = "Copy failed. Open browser console for report text.";
+      console.log(report);
+    }
   }
 
   function formatDuration(secs) {
@@ -592,10 +900,14 @@
     const statusLine = document.getElementById("status-line");
 
     ps.style.display = "block";
+    document.getElementById("issues-section").style.display = "none";
+    document.getElementById("issues-list").innerHTML = "";
+    document.getElementById("copy-msg").textContent = "";
+    latestTaskStatus = null;
     fill.style.width = "0%";
     fill.className = "progress-fill";
     pct.textContent = "0%";
-    stage.textContent = "Downloading";
+    stage.textContent = "Queued";
     statusLine.textContent = "Starting…";
 
     try {
@@ -613,6 +925,7 @@
         return;
       }
       currentTaskId = data.task_id;
+      setTaskId(data.task_id);
       pollStatus(btn);
     } catch (err) {
       showError(err.message);
@@ -633,19 +946,38 @@
     try {
       const resp = await fetch(`/api/status/${currentTaskId}`);
       const data = await resp.json();
+      latestTaskStatus = data;
 
       const p = data.progress || 0;
       fill.style.width = p + "%";
       pctEl.textContent = p + "%";
 
-      if (data.current_file) {
-        statusLine.textContent = "↓ " + data.current_file;
+      const currentName = data.current_item || data.current_file;
+      const detailBits = [];
+      if (data.current_item_pct && data.current_item_pct > 0) detailBits.push(`${data.current_item_pct}%`);
+      const speed = formatSpeed(data.current_speed);
+      if (speed) detailBits.push(speed);
+      const eta = formatEta(data.eta_seconds);
+      if (eta) detailBits.push(`ETA ${eta}`);
+      if (currentName) {
+        statusLine.textContent = `↓ ${currentName}${detailBits.length ? " · " + detailBits.join(" · ") : ""}`;
+      } else if (data.summary) {
+        statusLine.textContent = data.summary;
       }
       if (data.total > 0) {
-        stage.textContent = `Track ${data.completed || 0} / ${data.total}`;
+        const skipped = data.skipped || 0;
+        stage.textContent = `Track ${data.completed || 0} / ${data.total}${skipped ? ` · Skipped ${skipped}` : ""}`;
+      } else if (data.phase) {
+        stage.textContent = data.phase.charAt(0).toUpperCase() + data.phase.slice(1);
       }
 
-      if (data.status === "downloading" || data.status === "pending") {
+      if (data.summary && !currentName) {
+        statusLine.textContent = data.summary;
+      }
+
+      renderIssues(data);
+
+      if (isActiveStatus(data.status)) {
         setTimeout(() => pollStatus(btn), 800);
       } else if (data.status === "finished") {
         fill.style.width = "100%";
@@ -658,40 +990,252 @@
         setTimeout(() => {
           document.getElementById("progress-section").style.display = "none";
         }, 3000);
-        refreshFiles();
-      } else if (data.status === "error") {
-        showError(data.error || "Download failed");
-        document.getElementById("progress-section").style.display = "none";
+        setTaskId(null);
+        loadLibrary(currentLibraryPath);
+      } else if (data.status === "finished_with_errors") {
+        fill.style.width = "100%";
+        pctEl.textContent = "100%";
+        stage.textContent = "Complete with issues";
+        statusLine.textContent = data.summary || `Completed with ${data.failed || 0} failures.`;
         btn.disabled = false;
         btn.textContent = "↓ Download All as MP3";
+        showError(data.summary || "Download finished with errors.");
+        setTaskId(null);
+        loadLibrary(currentLibraryPath);
+      } else if (data.status === "error") {
+        showError(data.error || "Download failed");
+        renderIssues(data);
+        btn.disabled = false;
+        btn.textContent = "↓ Download All as MP3";
+        setTaskId(null);
       }
     } catch (err) {
       setTimeout(() => pollStatus(btn), 1500);
     }
   }
 
-  async function refreshFiles() {
-    try {
-      const resp = await fetch("/api/files");
-      const files = await resp.json();
-      const section = document.getElementById("downloads-section");
-      const list = document.getElementById("files-list");
+  async function restoreActiveTask() {
+    const btn = document.getElementById("btn-download");
+    const ps = document.getElementById("progress-section");
+    const storedTaskId = (() => {
+      try { return localStorage.getItem("activeTaskId"); } catch (e) { return null; }
+    })();
 
-      if (files.length === 0) {
-        section.style.display = "none";
-        return;
+    if (storedTaskId) {
+      setTaskId(storedTaskId);
+      ps.style.display = "block";
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Resuming…';
+      pollStatus(btn);
+      return;
+    }
+
+    try {
+      const resp = await fetch("/api/tasks?active=1");
+      if (!resp.ok) return;
+      const tasks = await resp.json();
+      if (!tasks.length) return;
+
+      setTaskId(tasks[0].task_id);
+      ps.style.display = "block";
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Resuming…';
+      pollStatus(btn);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  async function loadLibrary(path="") {
+    const section = document.getElementById("downloads-section");
+    const list = document.getElementById("files-list");
+    const chip = document.getElementById("library-path");
+    try {
+      const data = await fetchJson(`/api/library?path=${encodeURIComponent(path)}`);
+      currentLibraryPath = data.path || "";
+      chip.textContent = "/" + currentLibraryPath;
+
+      const rows = [];
+      for (const folder of data.folders || []) {
+        rows.push(`
+          <div class="file-row">
+            <span class="file-name">📁 ${esc(folder.name)}</span>
+            <div class="file-actions">
+              <button class="file-dl-btn btn-secondary" data-action="open-folder" data-path="${encodeURIComponent(folder.path)}">Open</button>
+              <button class="file-dl-btn btn-secondary" data-action="rename" data-path="${encodeURIComponent(folder.path)}">Rename</button>
+              <button class="file-dl-btn btn-secondary" data-action="move" data-path="${encodeURIComponent(folder.path)}">Move</button>
+              <button class="file-dl-btn btn-secondary" data-action="delete" data-path="${encodeURIComponent(folder.path)}">Delete</button>
+            </div>
+          </div>
+        `);
       }
 
-      list.innerHTML = files.map(f =>
-        `<div class="file-row">
-          <span class="file-name">🎵 ${esc(f)}</span>
-          <a href="/api/files/${encodeURIComponent(f)}" download>
-            <button class="file-dl-btn btn-secondary">↓ Save</button>
-          </a>
-        </div>`
-      ).join("");
+      for (const file of data.files || []) {
+        rows.push(`
+          <div class="file-row">
+            <span class="file-name">🎵 ${esc(file.name)}</span>
+            <div class="file-actions">
+              <button class="file-dl-btn btn-secondary" data-action="edit-meta" data-path="${encodeURIComponent(file.path)}">Metadata</button>
+              <button class="file-dl-btn btn-secondary" data-action="rename" data-path="${encodeURIComponent(file.path)}">Rename</button>
+              <button class="file-dl-btn btn-secondary" data-action="move" data-path="${encodeURIComponent(file.path)}">Move</button>
+              <button class="file-dl-btn btn-secondary" data-action="delete" data-path="${encodeURIComponent(file.path)}">Delete</button>
+              <a href="/api/library/download?path=${encodeURIComponent(file.path)}" download>
+                <button class="file-dl-btn btn-secondary">Save</button>
+              </a>
+            </div>
+          </div>
+        `);
+      }
+
+      if (!rows.length) {
+        rows.push('<div class="file-row"><span class="file-name">No folders or songs in this location yet.</span></div>');
+      }
+
+      list.innerHTML = rows.join("");
       section.style.display = "block";
-    } catch(e) { /* ignore */ }
+      hideLibraryMsg();
+      wireLibraryButtons();
+    } catch (e) {
+      section.style.display = "none";
+      showError(e.message);
+    }
+  }
+
+  function wireLibraryButtons() {
+    const list = document.getElementById("files-list");
+    list.querySelectorAll("button[data-action]").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        const action = btn.dataset.action;
+        const path = decodeURIComponent(btn.dataset.path || "");
+        if (action === "open-folder") {
+          loadLibrary(path);
+        } else if (action === "rename") {
+          await renamePath(path);
+        } else if (action === "move") {
+          await movePath(path);
+        } else if (action === "delete") {
+          await deletePath(path);
+        } else if (action === "edit-meta") {
+          await openMetadataEditor(path);
+        }
+      });
+    });
+  }
+
+  function goLibraryUp() {
+    loadLibrary(parentPath(currentLibraryPath));
+  }
+
+  async function createFolder() {
+    const name = prompt("New folder name:");
+    if (!name) return;
+    try {
+      await fetchJson("/api/library/folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parent_path: currentLibraryPath, name })
+      });
+      showLibraryMsg(`Folder created: ${name}`);
+      loadLibrary(currentLibraryPath);
+    } catch (e) {
+      showLibraryMsg(e.message, true);
+    }
+  }
+
+  async function renamePath(path) {
+    const currentName = path.split("/").filter(Boolean).pop() || path;
+    const newName = prompt("Rename to:", currentName);
+    if (!newName || newName === currentName) return;
+    try {
+      await fetchJson("/api/library/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, new_name: newName })
+      });
+      showLibraryMsg(`Renamed to ${newName}`);
+      closeMetadataEditor();
+      loadLibrary(currentLibraryPath);
+    } catch (e) {
+      showLibraryMsg(e.message, true);
+    }
+  }
+
+  async function movePath(path) {
+    const target = prompt("Move to folder path (relative to library root):", currentLibraryPath || "");
+    if (target == null) return;
+    try {
+      await fetchJson("/api/library/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_path: path, target_dir: target.trim() })
+      });
+      showLibraryMsg("Moved successfully");
+      closeMetadataEditor();
+      loadLibrary(currentLibraryPath);
+    } catch (e) {
+      showLibraryMsg(e.message, true);
+    }
+  }
+
+  async function deletePath(path) {
+    const ok = confirm(`Delete '${path}'? This cannot be undone.`);
+    if (!ok) return;
+    try {
+      await fetchJson(`/api/library/path?path=${encodeURIComponent(path)}`, { method: "DELETE" });
+      showLibraryMsg(`Deleted: ${path}`);
+      if (editingSongPath === path) closeMetadataEditor();
+      loadLibrary(currentLibraryPath);
+    } catch (e) {
+      showLibraryMsg(e.message, true);
+    }
+  }
+
+  async function openMetadataEditor(path) {
+    try {
+      const data = await fetchJson(`/api/library/song?path=${encodeURIComponent(path)}`);
+      editingSongPath = data.path;
+      document.getElementById("meta-file").textContent = data.path;
+      document.getElementById("meta-title").value = data.metadata.title || "";
+      document.getElementById("meta-artist").value = data.metadata.artist || "";
+      document.getElementById("meta-album").value = data.metadata.album || "";
+      document.getElementById("meta-track").value = data.metadata.track || "";
+      document.getElementById("meta-year").value = data.metadata.year || "";
+      document.getElementById("meta-genre").value = data.metadata.genre || "";
+      document.getElementById("meta-editor").style.display = "block";
+      hideLibraryMsg();
+    } catch (e) {
+      showLibraryMsg(e.message, true);
+    }
+  }
+
+  function closeMetadataEditor() {
+    editingSongPath = null;
+    document.getElementById("meta-editor").style.display = "none";
+    document.getElementById("meta-file").textContent = "";
+  }
+
+  async function saveMetadata() {
+    if (!editingSongPath) return;
+    const metadata = {
+      title: document.getElementById("meta-title").value,
+      artist: document.getElementById("meta-artist").value,
+      album: document.getElementById("meta-album").value,
+      track: document.getElementById("meta-track").value,
+      year: document.getElementById("meta-year").value,
+      genre: document.getElementById("meta-genre").value,
+    };
+    try {
+      await fetchJson("/api/library/song", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: editingSongPath, metadata })
+      });
+      showLibraryMsg("Metadata saved");
+      loadLibrary(currentLibraryPath);
+    } catch (e) {
+      showLibraryMsg(e.message, true);
+    }
   }
 
   function esc(s) {
@@ -703,7 +1247,8 @@
   }
 
   // Load any existing files on page load
-  refreshFiles();
+  loadLibrary("");
+  restoreActiveTask();
 </script>
 </body>
 </html>

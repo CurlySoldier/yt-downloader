@@ -12,3 +12,12 @@ services:
       - DOWNLOAD_DIR=/downloads
       # Optionally override the output filename pattern
       # - OUTPUT_TEMPLATE=%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s
+      # Optional yt-dlp resilience tuning
+      # - YTDLP_RETRIES=10
+      # - YTDLP_SOCKET_TIMEOUT=30
+      # - YTDLP_PLAYER_CLIENTS=web,android
+      # - YTDLP_COOKIEFILE=/cookies/youtube_cookies.txt
+    # Optional: mount cookies for age-gated / restricted videos
+    # volumes:
+    #   - /home/chad/downloads:/downloads
+    #   - /home/chad/youtube_cookies.txt:/cookies/youtube_cookies.txt:ro
