@@ -21,4 +21,4 @@ ENV DOWNLOAD_DIR=/downloads
 ENV OUTPUT_TEMPLATE="%(playlist_title)s/%(playlist_index)s - %(title)s.%(ext)s"
 
 VOLUME /downloads
-CMD ["python", "app.py"]
+CMD ["gunicorn", "-k", "gthread", "--threads", "8", "--workers", "1", "--timeout", "120", "--bind", "0.0.0.0:5000", "app:app"]

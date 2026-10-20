@@ -1,15 +1,21 @@
 import os
+import json
 import time
 import uuid
 import shutil
+import queue
 import threading
+from urllib.parse import urlparse
 from datetime import datetime, timezone
-from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
+from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, Response, stream_with_context
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import yt_dlp
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3NoHeaderError
 
 app = Flask(__name__, static_folder="static")
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 # --- Config (override via environment variables) ---
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.expanduser("~/downloads"))
@@ -27,6 +33,8 @@ VIDEO_ID_ARCHIVE_LOCK = threading.Lock()
 # In-memory task store
 tasks = {}
 EVENT_HISTORY_LIMIT = 30
+TASK_SUBSCRIBERS = {}
+TASK_SUBSCRIBERS_LOCK = threading.Lock()
 
 
 def _env_int(name, default):
@@ -44,8 +52,114 @@ def _env_csv(name, default_csv):
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
+MAX_URLS_PER_REQUEST = _env_int("MAX_URLS_PER_REQUEST", 25)
+MAX_ITEMS_PER_TASK = _env_int("MAX_ITEMS_PER_TASK", 300)
+SSE_HEARTBEAT_SECONDS = _env_int("SSE_HEARTBEAT_SECONDS", 20)
+SSE_RETRY_MS = _env_int("SSE_RETRY_MS", 2000)
+ALLOWED_YOUTUBE_HOSTS = set(
+    h.lower() for h in _env_csv(
+        "ALLOWED_YOUTUBE_HOSTS",
+        "youtube.com,www.youtube.com,m.youtube.com,music.youtube.com,youtu.be,www.youtu.be",
+    )
+)
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _is_active_status(status):
+    return status in {"queued", "preparing", "downloading", "retrying", "pending"}
+
+
+def _task_payload(task_id, task):
+    payload = {k: v for k, v in task.items() if not str(k).startswith("_")}
+    payload["task_id"] = task_id
+    return payload
+
+
+def _queue_put_latest(q, payload):
+    try:
+        q.put_nowait(payload)
+    except queue.Full:
+        try:
+            q.get_nowait()
+        except queue.Empty:
+            pass
+        try:
+            q.put_nowait(payload)
+        except queue.Full:
+            pass
+
+
+def _register_task_subscriber(task_id):
+    q = queue.Queue(maxsize=25)
+    with TASK_SUBSCRIBERS_LOCK:
+        TASK_SUBSCRIBERS.setdefault(task_id, set()).add(q)
+    return q
+
+
+def _unregister_task_subscriber(task_id, q):
+    with TASK_SUBSCRIBERS_LOCK:
+        subscribers = TASK_SUBSCRIBERS.get(task_id)
+        if not subscribers:
+            return
+        subscribers.discard(q)
+        if not subscribers:
+            TASK_SUBSCRIBERS.pop(task_id, None)
+
+
+def _publish_task_update(task_id):
+    task = tasks.get(task_id)
+    if not task:
+        return
+
+    payload = _task_payload(task_id, task)
+    with TASK_SUBSCRIBERS_LOCK:
+        subscribers = list(TASK_SUBSCRIBERS.get(task_id, ()))
+
+    for q in subscribers:
+        _queue_put_latest(q, payload)
+
+
+def _sse_frame(event, data):
+    encoded = json.dumps(data, separators=(",", ":"))
+    return f"event: {event}\ndata: {encoded}\n\n"
+
+
+def _looks_like_youtube_host(host):
+    value = (host or "").strip().lower().rstrip(".")
+    if not value:
+        return False
+    if value in ALLOWED_YOUTUBE_HOSTS:
+        return True
+    return value.endswith(".youtube.com") or value.endswith(".youtu.be")
+
+
+def _validate_urls(urls):
+    if not isinstance(urls, list):
+        raise ValueError("URLs must be a JSON list")
+
+    cleaned = []
+    for raw in urls:
+        value = (raw or "").strip()
+        if value:
+            cleaned.append(value)
+
+    if not cleaned:
+        raise ValueError("No URLs provided")
+    if len(cleaned) > MAX_URLS_PER_REQUEST:
+        raise ValueError(f"Too many URLs (max {MAX_URLS_PER_REQUEST} per request)")
+
+    for value in cleaned:
+        parsed = urlparse(value)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("Only HTTP(S) YouTube URLs are allowed")
+        host = parsed.hostname or ""
+        if not _looks_like_youtube_host(host):
+            raise ValueError(f"Unsupported host: {host or 'unknown'}")
+
+    return cleaned
 
 
 def _push_event(task, message):
@@ -226,8 +340,17 @@ def _entry_video_id(entry):
 
 def _build_download_items(urls, task):
     items = []
+
+    def can_append_more():
+        if len(items) < MAX_ITEMS_PER_TASK:
+            return True
+        _push_event(task, f"Item cap reached ({MAX_ITEMS_PER_TASK}). Extra entries were skipped.")
+        return False
+
     with yt_dlp.YoutubeDL(_info_opts()) as ydl:
         for url in urls:
+            if not can_append_more():
+                break
             try:
                 info = ydl.extract_info(url, download=False)
             except Exception as e:
@@ -243,6 +366,8 @@ def _build_download_items(urls, task):
                     continue
 
                 for idx, entry in enumerate(entries, start=1):
+                    if not can_append_more():
+                        break
                     items.append(
                         {
                             "url": _entry_to_url(entry, url),
@@ -252,6 +377,8 @@ def _build_download_items(urls, task):
                         }
                     )
             else:
+                if not can_append_more():
+                    break
                 items.append(
                     {
                         "url": url,
@@ -363,13 +490,15 @@ def favicon():
 
 
 @app.route("/api/info", methods=["POST"])
+@limiter.limit(os.environ.get("RATE_LIMIT_INFO", "30 per minute"))
 def api_info():
     data = request.get_json()
     if not data:
         return jsonify({"error": "No JSON body"}), 400
-    urls = data.get("urls", [])
-    if not urls:
-        return jsonify({"error": "No URLs provided"}), 400
+    try:
+        urls = _validate_urls(data.get("urls", []))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     results = []
     with yt_dlp.YoutubeDL(_info_opts()) as ydl:
@@ -413,11 +542,20 @@ def api_info():
 
 def _run_download(task_id, urls):
     task = tasks[task_id]
+    last_emit = 0.0
+
+    def emit(force=False):
+        nonlocal last_emit
+        now = time.monotonic()
+        if force or (now - last_emit) >= 0.35:
+            last_emit = now
+            _publish_task_update(task_id)
 
     task["started_at"] = _now_iso()
     _set_phase(task, "preparing")
     task["summary"] = "Preparing download list..."
     _push_event(task, "Task queued")
+    emit(force=True)
 
     items = _build_download_items(urls, task)
     total = len(items)
@@ -429,11 +567,13 @@ def _run_download(task_id, urls):
         task["summary"] = task["error"]
         task["finished_at"] = _now_iso()
         _push_event(task, task["error"])
+        emit(force=True)
         return
 
     task["total"] = total
     task["summary"] = f"Ready to download {total} item{'s' if total != 1 else ''}."
     _push_event(task, task["summary"])
+    emit(force=True)
 
     strategies = _download_strategies()
     archived_video_ids = _read_archived_video_ids()
@@ -453,8 +593,10 @@ def _run_download(task_id, urls):
             task["current_speed"] = int(speed) if speed else None
             eta = d.get("eta")
             task["eta_seconds"] = int(eta) if eta is not None else None
+            emit()
         elif status == "finished":
             task["current_item_pct"] = 100
+            emit()
 
     try:
         for item in items:
@@ -483,6 +625,7 @@ def _run_download(task_id, urls):
                     _set_phase(task, "retrying")
                     task["summary"] = f"Retrying {item['title']} ({strategy['name']})"
                     _push_event(task, f"Retrying '{item['title']}' via {strategy['name']}")
+                emit(force=True)
 
                 try:
                     with yt_dlp.YoutubeDL(_download_opts(progress_hook, strategy["extra"])) as ydl:
@@ -524,6 +667,7 @@ def _run_download(task_id, urls):
                     }
                 )
                 _push_event(task, f"Failed '{item['title']}': {issue_message}")
+            emit(force=True)
 
         task["current_item"] = ""
         task["current_item_pct"] = 0
@@ -559,6 +703,7 @@ def _run_download(task_id, urls):
         task["progress"] = 100
         task["finished_at"] = _now_iso()
         _push_event(task, task["summary"])
+        emit(force=True)
     except Exception as e:
         task["phase"] = "error"
         task["status"] = "error"
@@ -567,16 +712,19 @@ def _run_download(task_id, urls):
         task["summary"] = f"Download task failed: {e}"
         task["finished_at"] = _now_iso()
         _push_event(task, task["summary"])
+        emit(force=True)
 
 
 @app.route("/api/download", methods=["POST"])
+@limiter.limit(os.environ.get("RATE_LIMIT_DOWNLOAD", "20 per minute"))
 def api_download():
     data = request.get_json()
     if not data:
         return jsonify({"error": "No JSON body"}), 400
-    urls = data.get("urls", [])
-    if not urls:
-        return jsonify({"error": "No URLs provided"}), 400
+    try:
+        urls = _validate_urls(data.get("urls", []))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     task_id = str(uuid.uuid4())
     tasks[task_id] = {
@@ -605,6 +753,7 @@ def api_download():
 
     thread = threading.Thread(target=_run_download, args=(task_id, urls), daemon=True)
     thread.start()
+    _publish_task_update(task_id)
 
     return jsonify({"task_id": task_id})
 
@@ -614,9 +763,49 @@ def api_status(task_id):
     task = tasks.get(task_id)
     if not task:
         return jsonify({"error": "Task not found"}), 404
-    payload = dict(task)
-    payload["task_id"] = task_id
-    return jsonify(payload)
+    return jsonify(_task_payload(task_id, task))
+
+
+@app.route("/api/status/stream/<task_id>")
+def api_status_stream(task_id):
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({"error": "Task not found"}), 404
+
+    def generate():
+        subscriber = _register_task_subscriber(task_id)
+        try:
+            current = tasks.get(task_id)
+            if not current:
+                yield _sse_frame("error", {"message": "Task not found", "task_id": task_id})
+                return
+
+            yield f"retry: {SSE_RETRY_MS}\n\n"
+            initial = _task_payload(task_id, current)
+            yield _sse_frame("status", initial)
+            if not _is_active_status(initial.get("status")):
+                return
+
+            while True:
+                try:
+                    payload = subscriber.get(timeout=SSE_HEARTBEAT_SECONDS)
+                    yield _sse_frame("status", payload)
+                    if not _is_active_status(payload.get("status")):
+                        return
+                except queue.Empty:
+                    yield _sse_frame("heartbeat", {"task_id": task_id, "at": _now_iso()})
+        finally:
+            _unregister_task_subscriber(task_id, subscriber)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.route("/api/tasks")
@@ -864,11 +1053,15 @@ def api_library_download():
 @app.route("/api/files/<path:filename>")
 def api_file_download(filename):
     """Download a specific file. Works with subdirectory paths."""
-    full = os.path.realpath(os.path.join(DOWNLOAD_DIR, filename))
-    # Security: prevent path traversal outside DOWNLOAD_DIR
-    if not full.startswith(os.path.realpath(DOWNLOAD_DIR)):
-        return jsonify({"error": "Forbidden"}), 403
-    return send_file(full, as_attachment=True, download_name=os.path.basename(full))
+    try:
+        full = _resolve_library_path(filename)
+        if not os.path.isfile(full):
+            return jsonify({"error": "File not found"}), 404
+        return send_file(full, as_attachment=True, download_name=os.path.basename(full))
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 # ---------------------------------------------------------------------------

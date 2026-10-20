@@ -1,3 +1,5 @@
-flask
-yt-dlp
-mutagen
+flask>=3.1,<4
+yt-dlp>=2024.8.6
+mutagen>=1.47,<2
+flask-limiter>=3.8,<4
+gunicorn>=22,<23
